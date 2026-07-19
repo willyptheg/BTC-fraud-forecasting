@@ -1,0 +1,341 @@
+---
+title: "265-lp-04"
+author: "Will Park 265"
+date: "2025-04-09"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(rvest)
+library(stringr)
+library(tidyverse)
+```
+
+
+```{r}
+price_data <- read.csv("BitcoinPriceData.csv")
+trend_data <- read.csv("BTCsent.csv")
+```
+
+### Task: Visualize Bitcoin Search Interest
+
+- **Objective:** Visualize interest based on Google search trends 
+- **Task Type:** Data Visualization  
+
+#### Implementation desc. 
+Used Google Trends data (2015–2025) to display public search behavior. 
+This reveals changes in public attention over time and supports predictive modeling.
+
+IMPORT
+Imported BTCsent.csv, which includes yearly search volume index data for the term “Bitcoin” from 2015–2025.
+
+TIDY
+Data was already structured with Year and bitcoin.price.searches. No transformation was necessary.
+
+UNDERSTAND LOOP
+Explore: Used search trends to understand fluctuations in public attention.
+Model: Not modeled, only visualized as raw trends.
+Refine: Added labels and formatted lines to highlight interest patterns.
+
+COMMUNICATE
+Line + point plot communicates changes in public sentiment over time.
+
+```{r}
+ggplot(trend_data, aes(x = Year, y = bitcoin.price.searches)) +
+  geom_line(color = "darkred", size = 1.2) +
+  geom_point(color = "darkred", size = 1.2) +
+  labs(
+    title = "Bitcoin Search Interest (Google Trends, 2015–2025)",
+    x = "Year",
+    y = "Average Search Interest (0–100 scale)"
+  ) +
+  theme_minimal()
+```
+
+
+### Task: Visualize Average Yearly Bitcoin Price
+
+- **Objective:** Analyze historical Bitcoin prices to establish a pricing trend for modeling.
+- **Task Type:** Data Visualization  
+
+#### Implementation desc. 
+Extracted yearly average prices (2018–2025) from historical data and plotted trends.
+This helps identify significant changes in market behavior and prepares data for forecasting.
+
+IMPORT
+Used btc_historical.csv, containing daily Bitcoin prices with timestamps.
+
+TIDY
+Renamed and converted the date field.
+
+Extracted Year, filtered for 2018–2025.
+
+Aggregated daily data into yearly averages.
+
+UNDERSTAND LOOP
+Explore: Investigated long-term price movement.
+Model: Computed yearly averages using mean(Open).
+Refine: Used dollar formatting and range restrictions for clarity.
+
+COMMUNICATE
+Line chart clearly communicates historical growth and trend stability/volatility.
+
+```{r}
+
+btc_data <- read_csv("btc_historical.csv")
+btc_data <- btc_data %>% rename(Date = `Open time`)
+btc_data$Date <- as.Date(btc_data$Date)
+btc_data$Year <- year(btc_data$Date)
+
+btc_yearly_avg <- btc_data %>%
+  filter(Year >= 2018, Year <= 2025) %>%
+  group_by(Year) %>%
+  summarise(Avg_Open = mean(Open, na.rm = TRUE))
+
+ggplot(btc_yearly_avg, aes(x = Year, y = Avg_Open)) +
+  geom_line(color = "orange", linewidth = 1.2) +
+  geom_point(color = "orange") +
+  scale_y_continuous(
+    limits = c(0, 110000),
+    breaks = seq(0, 110000, by = 10000),
+    labels = dollar_format()
+  ) +
+  scale_x_continuous(breaks = btc_yearly_avg$Year) +
+  labs(
+    title = "Average Yearly Bitcoin Price",
+    x = "Year",
+    y = "Average Opening Price (USD)"
+  ) +
+  theme_minimal()
+```
+
+
+### Task: Predicting Bitcoin Prices Based on Google Trends
+
+- **Objective:** Forecast Bitcoin prices using public interest (search trends) and time (year).
+- **Task Type:** Predictive Analytics  
+
+#### Implementation desc. 
+Applied linear and multivariate regression using search interest and year.Predicted future prices and visualized with confidence intervals.
+
+IMPORT
+Used both btc_yearly_avg and trend_data created above.
+
+TIDY
+Joined trend and price data by Year.
+
+Selected necessary columns for modeling.
+
+Created forecast years manually for multivariate model.
+
+UNDERSTAND LOOP
+Explore: Evaluated the linearity of the relationship between interest and price.
+Model: Ran linear and multivariate regressions.
+Refine: Used confidence intervals, layered plots, and future projections.
+
+COMMUNICATE
+Displayed both observed and forecasted prices.
+Plotted regression fit and shaded confidence intervals.
+
+
+```{r}
+predict_df <- btc_yearly_avg %>%
+  inner_join(trend_data, by = "Year") %>%
+  select(Year, Avg_Open, bitcoin.price.searches)
+
+# Linear regression: Avg_Open ~ bitcoin.price.searches
+model <- lm(Avg_Open ~ bitcoin.price.searches, data = predict_df)
+summary(model)
+
+predict_df <- predict_df %>%
+  mutate(Predicted_Price = predict(model, newdata = predict_df))
+
+ggplot(predict_df, aes(x = bitcoin.price.searches)) +
+  geom_point(aes(y = Avg_Open), color = "blue", size = 3) +
+  geom_line(aes(y = Predicted_Price), color = "red", linewidth = 1.2) +
+  labs(
+    title = "Predicted vs Actual Bitcoin Prices Based on Google Trends",
+    x = "Google Search Interest (0–100)",
+    y = "Average Bitcoin Price (USD)"
+  ) +
+  theme_minimal()
+
+
+# Multivariate regression with forecast
+multi_model <- lm(Avg_Open ~ Year + bitcoin.price.searches, data = predict_df)
+
+future_years <- data.frame(
+  Year = 2026:2028,
+  bitcoin.price.searches = c(30, 35, 40)
+)
+
+full_years <- bind_rows(
+  predict_df %>% select(Year, bitcoin.price.searches),
+  future_years
+)
+
+predictions <- predict(multi_model, newdata = full_years, interval = "confidence")
+full_years <- bind_cols(full_years, as.data.frame(predictions))
+
+full_years <- full_years %>%
+  mutate(Data_Type = ifelse(Year <= max(predict_df$Year), "Actual", "Forecast"))
+
+ggplot(full_years, aes(x = Year, y = fit, color = Data_Type)) +
+  geom_line(size = 1.2) +
+  geom_point(data = predict_df, aes(x = Year, y = Avg_Open), color = "blue", size = 3) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), fill = "gray80", alpha = 0.3) +
+  labs(
+    title = "Bitcoin Price Forecast Using Year + Google Trends",
+    x = "Year",
+    y = "Average Bitcoin Price (USD)"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Actual" = "blue", "Forecast" = "red"))
+```
+
+### Task: Querying Crypto Fraud Cases
+
+- **Objective:** Assess the rise in fraud cases  
+- **Task Type:** Database Query  
+
+**Implementation Description:**  
+I attempted to query CryptoScamDB for scam reports but received a 502 server error. As a fallback, I used the BitcoinHeist dataset to summarize Bitcoin fraud cases by year. This query revealed peak activity around 2016–2018. The objective remained unchanged; only the data source was adjusted.
+
+IMPORT
+Used BitcoinHeistData.csv as a fallback after API failure.
+
+TIDY
+Filtered only fraudulent cases (label != "white").
+
+Grouped by year.
+
+UNDERSTAND LOOP
+Explore: Identified periods of heightened fraud activity.
+Model: Counted total cases per year.
+Refine: Used basic column plot.
+
+COMMUNICATE
+Time series of fraud counts over time communicates urgency and risk pattern.
+
+```{r}
+fraud_data <- read_csv("BitcoinHeistData.csv")
+
+# Summarize only fraudulent cases by year
+fraud_summary <- fraud_data %>%
+  filter(label != "white") %>%   # filter only fraud cases
+  group_by(year) %>%
+  summarise(Fraud_Cases = n())
+
+# Plot
+ggplot(fraud_summary, aes(x = year, y = Fraud_Cases)) +
+  geom_col(fill = "darkred") +
+  labs(
+    title = "Reported Bitcoin Fraud Cases by Year",
+    x = "Year", y = "Number of Fraud Cases"
+  ) +
+  theme_minimal()
+
+```
+
+
+### Task: Most Common Bitcoin Fraud Types
+
+- **Objective:** Assess the rise in fraud cases  
+- **Task Type:** Database Query  
+
+#### Implementation Description  
+To identify which fraud types are most common in the Bitcoin ecosystem, I grouped all fraudulent transactions (excluding those labeled "white") by fraud label and summarized their frequency.  
+The plot clearly shows phishing and ransomware as the most reported fraud types. This supports the goal of understanding fraud prevalence across categories.
+
+TIDY
+Grouped by label, then sorted by frequency.
+
+UNDERSTAND LOOP
+Explore: Revealed the most dominant types of fraud.
+Model: Count of each fraud type.
+Refine: Ordered bars and rotated text for clarity.
+
+COMMUNICATE
+Bar chart shows which scams dominate the ecosystem.
+
+```{r}
+fraud_types <- fraud_data %>%
+  filter(label != "white") %>%
+  group_by(label) %>%
+  summarise(Cases = n()) %>%
+  arrange(desc(Cases))
+
+ggplot(fraud_types, aes(x = reorder(label, -Cases), y = Cases)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Most Common Bitcoin Fraud Types",
+    x = "Fraud Type", y = "Number of Cases"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Task: Predicting Bitcoin Fraud Based on Network Features and Market Growth
+
+- **Objective:** Develop predictive models  
+- **Task Type:** Predictive Modeling  
+
+#### Implementation Description  
+To explore whether fraud can be predicted based on address characteristics and market trends, I developed a logistic regression model using the BitcoinHeist dataset. I created a binary outcome variable (`is_fraud`) based on whether the `label` was “white” (legit) or a fraud type. I added annual Bitcoin growth as an external variable and modeled fraud probability using `length`, `weight`, and `growth`
+
+TIDY
+Created binary is_fraud column.
+
+Merged external market data with fraud records.
+
+UNDERSTAND LOOP
+Explore: Hypothesized that address features + market growth affect fraud.
+Model: Logistic regression with glm().
+Refine: Output summary to evaluate variable significance.
+
+COMMUNICATE
+Model summary indicates predictors’ effects on fraud probability.
+
+```{r}
+# Load data
+fraud_data <- read_csv("BitcoinHeistData.csv")
+
+# Label fraud
+fraud_data <- fraud_data %>%
+  mutate(is_fraud = ifelse(label == "white", 0, 1))
+
+# External feature: market growth
+btc_growth <- tibble(
+  year = c(2013, 2014, 2015, 2016, 2017),
+  btc_price = c(800, 500, 600, 970, 4200),
+  growth = c(NA, -37.5, 20.0, 61.7, 333.0)
+)
+
+# Merge into fraud dataset
+fraud_data <- fraud_data %>%
+  left_join(btc_growth, by = "year")
+
+# Model data
+model_data <- fraud_data %>%
+  select(length, weight, growth, is_fraud) %>%
+  filter(!is.na(growth))
+
+# Fit logistic regression
+model <- glm(is_fraud ~ length + weight + growth, data = model_data, family = binomial)
+summary(model)
+
+```
+
+Additional notes and update to proposal:
+Project overview:
+- Explore the relationship between public interest in Bitcoin, its market value trends, and the prevalence of Bitcoin-related fraud. The project utilizes datasets from Google Trends, historical Bitcoin pricing, and the BitcoinHeist fraud database to:
+
+Primary objectives:
+- Data exploration: visualize interest over time, historical average prices, frequency and types of fraud cases
+- Predictive modeling: forecast prices based on search interest and time and predict fraud probability using transaction features and market context
