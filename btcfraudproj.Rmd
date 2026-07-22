@@ -333,6 +333,10 @@ summary(model)
 ```
 
 Additional notes and update to proposal:
+
+Data set fault:
+- The dataset btc_historical was lost and had to be replaced but the updated csv varied significantly from the previous version. The current code does NOT reflect this change and needs to be updated. 
+
 Project overview:
 - Explore the relationship between public interest in Bitcoin, its market value trends, and the prevalence of Bitcoin-related fraud. The project utilizes datasets from Google Trends, historical Bitcoin pricing, and the BitcoinHeist fraud database to:
 
