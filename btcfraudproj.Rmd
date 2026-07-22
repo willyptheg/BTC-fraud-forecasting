@@ -1,7 +1,6 @@
 ---
 title: "265-lp-04"
-author: "Will Park 265"
-date: "2025-04-09"
+author: "WP"
 output:
   pdf_document: default
   html_document: default
