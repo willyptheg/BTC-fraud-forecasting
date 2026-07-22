@@ -343,3 +343,5 @@ Project overview:
 Primary objectives:
 - Data exploration: visualize interest over time, historical average prices, frequency and types of fraud cases
 - Predictive modeling: forecast prices based on search interest and time and predict fraud probability using transaction features and market context
+
+test comment delete later for push
